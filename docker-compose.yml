@@ -1,0 +1,82 @@
+services:
+  # 1. Database PostgreSQL (Staging + DWH)
+  db:
+    image: postgres:16-alpine
+    container_name: dwh_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-dwh_saham}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Inisialisasi otomatis DDL saat container pertama kali dibuat:
+      - ./database/01_staging.sql:/docker-entrypoint-initdb.d/01_staging.sql
+      - ./database/02_dwh.sql:/docker-entrypoint-initdb.d/02_dwh.sql
+      - ./database/03_seed.sql:/docker-entrypoint-initdb.d/03_seed.sql
+      - ./database/schema/01_cfg_auth.sql:/docker-entrypoint-initdb.d/04_cfg_auth.sql
+    networks:
+      - dwh_network
+
+  # 2. Python Worker & Scheduler
+  capture:
+    build:
+      context: .
+      dockerfile: ./capture/Dockerfile
+    container_name: dwh_capture
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-dwh_saham}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - STOCKBIT_TOKEN=${STOCKBIT_TOKEN}
+    depends_on:
+      - db
+    volumes:
+      - ./capture:/app/capture
+      - ./docs:/app/docs
+      - ./.env:/app/.env
+    networks:
+      - dwh_network
+
+  # 3. Node.js Mini Web App
+  web:
+    build:
+      context: .
+      dockerfile: ./web/Dockerfile
+    container_name: dwh_web
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Jakarta
+      - PORT=3000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-dwh_saham}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - ./database/etl:/app/database/etl
+    networks:
+      - dwh_network
+
+volumes:
+  pgdata:
+
+networks:
+  dwh_network:
+    driver: bridge

@@ -1,0 +1,57 @@
+<h2 class="mb-3">Hasil Data Warehouse</h2>
+
+<h5 class="mt-3">Fact Broksum</h5>
+<table class="table table-striped table-sm datatable mb-4">
+  <thead>
+    <tr>
+      <th>Tanggal</th>
+      <th>Ticker</th>
+      <th>Broker</th>
+      <th>Buy Lot</th>
+      <th>Buy Value</th>
+      <th>Sell Lot</th>
+      <th>Sell Value</th>
+      <th>Net Lot</th>
+      <th>Net Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% dwh.factBroksum.forEach(r => { %>
+      <tr>
+        <td><%= new Date(r.tanggal).toISOString().slice(0, 10) %></td>
+        <td><%= r.ticker %></td>
+        <td><%= r.broker_code %></td>
+        <td><%= r.buy_lot %></td>
+        <td><%= r.buy_value %></td>
+        <td><%= r.sell_lot %></td>
+        <td><%= r.sell_value %></td>
+        <td><%= r.net_lot %></td>
+        <td><%= r.net_value %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<h5 class="mt-4">Ringkasan Order Book (View)</h5>
+<table class="table table-striped table-sm datatable">
+  <thead>
+    <tr>
+      <th>Tanggal</th>
+      <th>Ticker</th>
+      <th>Total Bid Lot</th>
+      <th>Total Offer Lot</th>
+      <th>Spread</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% dwh.orderbookRingkas.forEach(r => { %>
+      <tr>
+        <td><%= new Date(r.tanggal).toISOString().slice(0, 10) %></td>
+        <td><%= r.ticker %></td>
+        <td><%= r.total_bid_lot %></td>
+        <td><%= r.total_offer_lot %></td>
+        <td><%= r.spread %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>

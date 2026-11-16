@@ -1,0 +1,32 @@
+<h2 class="mb-3">Log Capture</h2>
+
+<table class="table table-striped table-sm datatable">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Jenis</th>
+      <th>Ticker</th>
+      <th>Mulai</th>
+      <th>Selesai</th>
+      <th>Status</th>
+      <th>Baris</th>
+      <th>Pemicu</th>
+      <th>Error</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% logs.forEach(l => { %>
+      <tr>
+        <td><%= l.capture_id %></td>
+        <td><%= l.jenis %></td>
+        <td><%= l.ticker || '-' %></td>
+        <td><%= new Date(l.waktu_mulai).toLocaleString('id-ID') %></td>
+        <td><%= l.waktu_selesai ? new Date(l.waktu_selesai).toLocaleString('id-ID') : '-' %></td>
+        <td><%= l.status %></td>
+        <td><%= l.jumlah_baris %></td>
+        <td><%= l.pemicu %></td>
+        <td><%= l.pesan_error || '-' %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>

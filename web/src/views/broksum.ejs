@@ -1,0 +1,46 @@
+<h2 class="mb-3">Broker Summary (Staging)</h2>
+
+<form class="row g-2 mb-3" method="GET" action="/broksum">
+  <div class="col-auto">
+    <input type="text" name="ticker" class="form-control" placeholder="Ticker (mis. BBCA)" value="<%= filter.ticker %>" />
+  </div>
+  <div class="col-auto">
+    <input type="date" name="date" class="form-control" value="<%= filter.date %>" />
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+  </div>
+</form>
+
+<table class="table table-striped table-sm datatable">
+  <thead>
+    <tr>
+      <th>Tanggal</th>
+      <th>Ticker</th>
+      <th>Broker</th>
+      <th>Buy Lot</th>
+      <th>Buy Val</th>
+      <th>Buy Avg</th>
+      <th>Sell Lot</th>
+      <th>Sell Val</th>
+      <th>Sell Avg</th>
+      <th>Diproses</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% rows.forEach(r => { %>
+      <tr>
+        <td><%= new Date(r.trade_date).toISOString().slice(0, 10) %></td>
+        <td><%= r.ticker %></td>
+        <td><%= r.broker_code %></td>
+        <td><%= r.buy_lot_raw %></td>
+        <td><%= r.buy_val_raw %></td>
+        <td><%= r.buy_avg_raw %></td>
+        <td><%= r.sell_lot_raw %></td>
+        <td><%= r.sell_val_raw %></td>
+        <td><%= r.sell_avg_raw %></td>
+        <td><%= r.processed ? 'Ya' : 'Belum' %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>

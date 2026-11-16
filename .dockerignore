@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Environment & Sensitive Credentials
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# Logs & Screenshots
+*.log
+capture/logs/
+capture/screenshots/
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation / Markdown raw demo
+docs/*.png
+docs/*.pdf

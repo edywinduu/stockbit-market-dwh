@@ -1,0 +1,72 @@
+# ============================================================================
+# .gitignore - UAS_SAHAM
+# ============================================================================
+
+# 1. Environment & Sensitive Credentials
+.env
+.env.*
+!.env.example
+
+# 2. Python Virtual Environments & Packages
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# 3. Node.js Dependencies & Cache
+node_modules/
+web/node_modules/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# 4. Browser Automation, Playwright, & Persistent Sessions
+.stockbit_session/
+chrome_profile/
+playwright-report/
+test-results/
+.playwright/
+
+# 5. Database Local Storage & Dumps
+pgdata/
+*.dump
+*.sql.bak
+
+# 6. Logs & Temporary Debug Files
+*.log
+capture/logs/
+capture/screenshots/
+
+# 7. IDE & Editor Metadata
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# 8. Operating System Metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+desktop.ini
