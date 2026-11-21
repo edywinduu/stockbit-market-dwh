@@ -17,6 +17,7 @@ services:
       - ./database/02_dwh.sql:/docker-entrypoint-initdb.d/02_dwh.sql
       - ./database/03_seed.sql:/docker-entrypoint-initdb.d/03_seed.sql
       - ./database/schema/01_cfg_auth.sql:/docker-entrypoint-initdb.d/04_cfg_auth.sql
+      - ./database/schema/02_broksum_pipeline.sql:/docker-entrypoint-initdb.d/05_broksum_pipeline.sql
     networks:
       - dwh_network
 
@@ -43,6 +44,7 @@ services:
       - db
     volumes:
       - ./capture:/app/capture
+      - ./database/data:/app/database/data
       - ./docs:/app/docs
       - ./.env:/app/.env
     networks:

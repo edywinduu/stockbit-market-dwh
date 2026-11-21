@@ -1,3 +1,3 @@
 #!/bin/sh
 set -e
-python -m capture.main broksum --trigger SCHEDULER
+python -m capture.main broksum --mode daily --trigger SCHEDULER

@@ -8,6 +8,14 @@ CREATE TABLE staging.cfg_stock (
   is_active     BOOLEAN DEFAULT TRUE
 );
 
+-- 1a. Master table of all active IDX tickers
+CREATE TABLE IF NOT EXISTS staging.ref_ticker (
+  ticker        VARCHAR(10) PRIMARY KEY,
+  company_name  TEXT,
+  is_active     BOOLEAN DEFAULT TRUE,
+  updated_at    TIMESTAMP DEFAULT NOW()
+);
+
 -- 1b. Persistent authentication token store (synced from host browser session)
 CREATE TABLE IF NOT EXISTS staging.cfg_auth (
   provider      VARCHAR(50) PRIMARY KEY,
@@ -21,18 +29,24 @@ CREATE TABLE staging.ref_holiday (
   description   VARCHAR(100)
 );
 
--- 3. Pipeline audit and execution log
+-- 3. Pipeline audit and execution log (with resumable checkpointing)
 CREATE TABLE staging.capture_log (
   capture_id    BIGSERIAL PRIMARY KEY,
   capture_type  VARCHAR(20) NOT NULL,           -- orderbook | broksum
+  job_type      VARCHAR(20),                    -- broksum | orderbook
   ticker        VARCHAR(10),
+  trade_date    DATE,
   started_at    TIMESTAMP NOT NULL,
   finished_at   TIMESTAMP,
   status        VARCHAR(10) NOT NULL,           -- RUNNING | SUCCESS | FAILED | SKIPPED
   row_count     INT DEFAULT 0,
   error_message TEXT,
-  triggered_by  VARCHAR(10) DEFAULT 'SCHEDULER' -- SCHEDULER | MANUAL
+  triggered_by  VARCHAR(10) DEFAULT 'SCHEDULER',-- SCHEDULER | MANUAL
+  updated_at    TIMESTAMP DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_capture_log_checkpoint
+  ON staging.capture_log (job_type, ticker, trade_date);
 
 -- 4. ETL pipeline audit log
 CREATE TABLE staging.etl_log (
@@ -84,5 +98,6 @@ CREATE TABLE staging.broksum_raw (
   sell_val_raw  VARCHAR(30),
   sell_avg_raw  VARCHAR(30),
   is_processed  BOOLEAN DEFAULT FALSE,
+  updated_at    TIMESTAMP DEFAULT NOW(),
   UNIQUE (ticker, trade_date, broker_code)
 );

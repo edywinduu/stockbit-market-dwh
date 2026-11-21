@@ -1,4 +1,7 @@
 import argparse
+import base64
+from datetime import datetime, timezone
+import json
 import os
 import sys
 import time
@@ -18,8 +21,8 @@ def get_db_connection():
     except ImportError as exc:
         print(
             f"[ERROR] Missing dependency ({exc.name}). Install host dependencies first:\n"
-            "  pip install playwright psycopg2-binary python-dotenv\n"
-            "  playwright install chromium"
+            "  .\\.venv\\Scripts\\python -m pip install playwright psycopg2-binary python-dotenv\n"
+            "  .\\.venv\\Scripts\\playwright install chromium"
         )
         sys.exit(1)
 
@@ -31,6 +34,45 @@ def get_db_connection():
         user=os.getenv("DB_USER", "postgres"),
         password=os.getenv("DB_PASS", "postgres"),
     )
+
+
+def parse_jwt(token: str) -> dict | None:
+    try:
+        clean = token.replace("Bearer ", "").replace("bearer ", "").strip()
+        clean = clean.strip('"').strip("'")
+        parts = clean.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload.encode("utf-8")))
+    except Exception:
+        return None
+
+
+def is_jwt_active(token: str, buffer_sec: int = 120) -> tuple[bool, str]:
+    """
+    Checks if token is a valid, unexpired ACCESS token.
+    Returns (is_active, reason_or_status).
+    """
+    payload = parse_jwt(token)
+    if not payload:
+        return False, "Bukan format JWT valid"
+
+    data = payload.get("data", {})
+    if isinstance(data, dict) and data.get("typ") == "refresh":
+        return False, "Ini Refresh Token (bukan Access Token)"
+
+    exp = payload.get("exp")
+    if not exp or not isinstance(exp, (int, float)):
+        return False, "Tidak memiliki waktu kedaluwarsa (exp)"
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if now_ts >= (exp - buffer_sec):
+        exp_str = datetime.fromtimestamp(exp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return False, f"Token sudah kedaluwarsa pada {exp_str}"
+
+    exp_str = datetime.fromtimestamp(exp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return True, f"Valid s/d {exp_str}"
 
 
 def upsert_auth_header(provider: str, auth_header: str) -> None:
@@ -71,20 +113,36 @@ def sync_stockbit_session(interactive: bool = False, profile_dir: str | None = N
 
     captured_auth: dict[str, str | None] = {"header": None}
 
+    def check_candidate(candidate: str | None, source: str = "") -> bool:
+        if not candidate or captured_auth["header"]:
+            return False
+        clean = candidate.strip()
+        bearer = clean if clean.lower().startswith("bearer ") else f"Bearer {clean}"
+
+        valid, reason = is_jwt_active(bearer)
+        if valid:
+            payload = parse_jwt(bearer)
+            username = (payload.get("data") or {}).get("use", "user")
+            print(f"[SYNC] -> Berhasil menemukan Access Token dari {source}! ({reason}, User: {username})")
+            captured_auth["header"] = bearer
+            return True
+        return False
+
     def on_request(request) -> None:
         if captured_auth["header"]:
             return
+        # Hanya tangkap dari request API ke exodus.stockbit.com
         if "exodus.stockbit.com" in request.url:
             headers = request.headers
             auth_val = headers.get("authorization") or headers.get("Authorization")
-            if auth_val and auth_val.lower().startswith("bearer eyj"):
-                captured_auth["header"] = auth_val.strip()
+            if auth_val and "bearer " in auth_val.lower():
+                check_candidate(auth_val, source=f"Request ke {request.url[:50]}")
 
     target_url = "https://stockbit.com/login" if interactive else f"https://stockbit.com/symbol/{ticker}"
-    wait_timeout_sec = 300 if interactive else 15
+    wait_timeout_sec = 300 if interactive else 20
 
-    print(f"[SYNC] Launching Playwright persistent context ({'GUI interactive' if interactive else 'headless'})...")
-    print(f"[SYNC] Session directory: {session_dir}")
+    print(f"[SYNC] Membuka Playwright browser ({'GUI Interaktif' if interactive else 'Headless'})...")
+    print(f"[SYNC] Direktori Sesi: {session_dir}")
 
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
@@ -101,18 +159,52 @@ def sync_stockbit_session(interactive: bool = False, profile_dir: str | None = N
             page.goto(target_url, wait_until="domcontentloaded", timeout=30000)
 
             if interactive:
-                print(
-                    "[SYNC] Please complete Stockbit login (including 2FA/OTP if prompted) in the browser window.\n"
-                    "[SYNC] Waiting up to 300s to intercept active Authorization Bearer token..."
-                )
+                print("=" * 70)
+                print("PANDUAN LOGIN INTERAKTIF:")
+                print("1. Jendela browser Stockbit sekarang terbuka di layar Anda.")
+                print("2. Silakan ketik username & password (dan OTP/2FA jika ada).")
+                print("3. Klik Login sampai Anda MASUK ke halaman Stockbit.")
+                print("4. Jendela browser TIDAK AKAN MENUTUP sampai Anda berhasil login.")
+                print("=" * 70)
 
             deadline = time.time() + wait_timeout_sec
             while time.time() < deadline and not captured_auth["header"]:
-                page.wait_for_timeout(500)
-                if interactive and "login" not in page.url.lower() and not captured_auth["header"]:
-                    # After interactive login redirects away from /login, ensure symbol API requests fire
-                    if f"/symbol/{ticker}" not in page.url:
-                        page.goto(f"https://stockbit.com/symbol/{ticker}", wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_timeout(1000)
+
+                current_url = page.url.lower()
+
+                # Di mode interaktif, selama masih di halaman login/register, JANGAN keluar
+                if interactive and ("login" in current_url or "register" in current_url) and not captured_auth["header"]:
+                    continue
+
+                # Jika pengguna sudah melewati halaman login, periksa localStorage untuk access token
+                if not captured_auth["header"]:
+                    try:
+                        tokens = page.evaluate(r"""() => {
+                            const res = [];
+                            for (let i = 0; i < localStorage.length; i++) {
+                                const val = localStorage.getItem(localStorage.key(i));
+                                if (val && typeof val === 'string' && val.includes('eyJ')) {
+                                    const matches = val.match(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g);
+                                    if (matches) res.push(...matches);
+                                }
+                            }
+                            return res;
+                        }""")
+                        if isinstance(tokens, list):
+                            for t in tokens:
+                                if check_candidate(t, source="localStorage"):
+                                    break
+                    except Exception:
+                        pass
+
+                # Jika sudah login dan bukan di halaman login, kunjungi halaman saham agar API call terpicu
+                if not captured_auth["header"] and ("login" not in current_url and "register" not in current_url):
+                    if f"/symbol/{ticker}".lower() not in current_url:
+                        try:
+                            page.goto(f"https://stockbit.com/symbol/{ticker}", wait_until="domcontentloaded", timeout=30000)
+                        except Exception:
+                            pass
         finally:
             context.close()
 
@@ -120,16 +212,16 @@ def sync_stockbit_session(interactive: bool = False, profile_dir: str | None = N
     if not auth_header:
         if not interactive:
             print(
-                "[SYNC] No active Stockbit Authorization header intercepted in headless mode.\n"
-                "[SYNC] Your session may have expired. Run with --interactive inside .venv to log in once:\n"
+                "[SYNC] Sesi browser di host belum memiliki Access Token aktif.\n"
+                "[SYNC] Jalankan mode interaktif untuk login di browser:\n"
                 "  .\\.venv\\Scripts\\python -m capture.sync_session --interactive"
             )
         else:
-            print("[SYNC] Timed out waiting for Stockbit Authorization token.")
+            print("[SYNC] Waktu tunggu habis (300 detik) atau jendela ditutup sebelum login berhasil.")
         return None
 
     upsert_auth_header("stockbit", auth_header)
-    print(f"[SYNC] Successfully synced 'stockbit' auth_header to staging.cfg_auth (len={len(auth_header)}).")
+    print(f"[SYNC] BERHASIL! Access Token baru telah disinkronkan ke staging.cfg_auth.")
     return auth_header
 
 
